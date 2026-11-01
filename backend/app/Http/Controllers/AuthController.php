@@ -12,8 +12,8 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $validatedData = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'first_name' => 'nullable|string|max:255',
+            'last_name' => 'nullable|string|max:255',
             'username' => 'required|string|min:3|max:255|unique:users,username',
             'email' => 'required|string|email|max:255|unique:users,email',
             'phone_number' => 'nullable|string|max:255',
@@ -21,13 +21,25 @@ class AuthController extends Controller
         ]);
 
         $user = User::create([
-            'first_name' => $validatedData['first_name'],
-            'last_name' => $validatedData['last_name'],
+        //    'first_name' => $validatedData['first_name'],
+        //    'last_name' => $validatedData['last_name'],
             'username' => $validatedData['username'],
             'email' => $validatedData['email'],
             'password' => $validatedData['password'],
         ]);
 
+        if (! empty($validatedData['first_name'])) {
+            UserProfile::create([
+                'user_id' => $user->user_id,
+                'first_name' => $validatedData['first_name'],
+            ]);
+        }
+        if (! empty($validatedData['last_name'])) {
+            UserProfile::create([
+                'user_id' => $user->user_id,
+                'last_name' => $validatedData['last_name'],
+            ]);
+        }
         if (! empty($validatedData['phone_number'])) {
             UserProfile::create([
                 'user_id' => $user->user_id,
