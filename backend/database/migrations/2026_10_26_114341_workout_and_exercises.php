@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('equipment')->nullable();
             $table->string('difficulty')->nullable();
             $table->string('instructions')->nullable();
+            $table->string('best_for')->nullable();
             $table->timestamps();
         });
 

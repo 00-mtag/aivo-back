@@ -146,7 +146,8 @@ class WorkoutController extends Controller
                 'exercises.muscle_group',
                 'exercises.equipment',
                 'exercises.difficulty',
-                'exercises.instructions'
+                'exercises.instructions',
+                'exercises.best_for'
             )
             ->orderBy('workout_exercises.workout_exercise_id')
             ->get();
