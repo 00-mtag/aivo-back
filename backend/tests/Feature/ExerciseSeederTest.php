@@ -112,4 +112,39 @@ class ExerciseSeederTest extends TestCase
     {
         $this->getJson('/api/exercises')->assertUnauthorized();
     }
+
+    public function test_exercise_catalog_filters_by_one_goal_and_accepts_lost_weight_alias(): void
+    {
+        $this->seed(ExerciseSeeder::class);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->getJson('/api/exercises?best_for=Lost%20Weight')
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'Treadmill Walk'])
+            ->assertJsonMissing(['name' => 'Barbell Back Squat']);
+    }
+
+    public function test_exercise_catalog_matches_any_selected_goal(): void
+    {
+        $this->seed(ExerciseSeeder::class);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->getJson('/api/exercises?best_for[]=Build%20Muscle&best_for[]=Lose%20Weight')
+            ->assertOk()
+            ->assertJsonFragment(['name' => 'Barbell Back Squat'])
+            ->assertJsonFragment(['name' => 'Treadmill Walk'])
+            ->assertJsonMissing(['name' => 'Side Plank']);
+    }
+
+    public function test_exercise_catalog_rejects_unknown_goal_filters(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->getJson('/api/exercises?best_for=Strength')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('best_for.0');
+    }
 }
