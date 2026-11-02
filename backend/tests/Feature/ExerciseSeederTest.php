@@ -80,4 +80,36 @@ class ExerciseSeederTest extends TestCase
                 'Build muscle, Lose weight, Improve endurance, Maintain performance'
             );
     }
+
+    public function test_authenticated_users_can_retrieve_the_exercise_catalog(): void
+    {
+        $this->seed(ExerciseSeeder::class);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->getJson('/api/exercises')
+            ->assertOk()
+            ->assertJsonCount(73, 'exercises')
+            ->assertJsonPath('exercises.0.name', 'Assisted Pull-Up')
+            ->assertJsonPath('exercises.0.best_for', 'Build muscle, Maintain performance')
+            ->assertJsonStructure([
+                'exercises' => [
+                    '*' => [
+                        'exercise_id',
+                        'name',
+                        'description',
+                        'muscle_group',
+                        'equipment',
+                        'difficulty',
+                        'instructions',
+                        'best_for',
+                    ],
+                ],
+            ]);
+    }
+
+    public function test_exercise_catalog_requires_authentication(): void
+    {
+        $this->getJson('/api/exercises')->assertUnauthorized();
+    }
 }

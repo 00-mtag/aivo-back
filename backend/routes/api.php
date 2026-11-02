@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AIChatController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ExerciseController;
 use App\Http\Controllers\NutritionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProgressController;
@@ -20,6 +21,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update']);
+
+    Route::get('/exercises', [ExerciseController::class, 'index']);
 
     Route::get('/ai-chat/conversations', [AIChatController::class, 'index']);
     Route::post('/ai-chat/conversations', [AIChatController::class, 'store']);
