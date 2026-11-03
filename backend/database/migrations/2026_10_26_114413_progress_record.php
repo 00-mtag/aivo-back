@@ -22,6 +22,18 @@ return new class extends Migration
             $table->string('notes')->nullable();
             $table->timestamps();
         });
+
+        Schema::create('progress_workout_records', function (Blueprint $table) {
+            $table->id('progress_workout_id');
+            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
+            $table->string('workout_name')->nullable();
+            $table->string('workout_type')->nullable();
+            $table->string('workout_duration')->nullable();
+            $table->string('workout_intensity')->nullable();
+            $table->string('exercises_done')->nullable();
+            $table->string('exerices_skipped')->nullable();
+            $table->timestamps();
+        });
     }
 
     /**

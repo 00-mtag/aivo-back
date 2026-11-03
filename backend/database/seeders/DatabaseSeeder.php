@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         $this->call(ExerciseSeeder::class);
+        $this->call(FoodSeeder::class);
 
         User::factory()->create([
             'first_name' => 'Test',
