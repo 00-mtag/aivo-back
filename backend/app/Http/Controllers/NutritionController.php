@@ -7,6 +7,44 @@ use Illuminate\Support\Facades\DB;
 
 class NutritionController extends Controller
 {
+    public function foodIndex(Request $request)
+    {
+        $userId = (string) $request->user()->user_id;
+        $foods = DB::table('food')
+            ->where(function ($query) use ($userId) {
+                $query->whereNull('uploaded_by')
+                    ->orWhere('uploaded_by', $userId);
+            })
+            ->orderBy('name')
+            ->get();
+
+        return response()->json(['foods' => $foods]);
+    }
+
+    public function storeFood(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255|unique:food,name',
+            'description' => 'sometimes|nullable|string|max:255',
+            'calories' => 'required|numeric|min:0',
+            'protein' => 'required|numeric|min:0',
+            'carbohydrates' => 'required|numeric|min:0',
+            'fat' => 'required|numeric|min:0',
+            'serving_size' => 'required|string|max:255',
+            'serving_unit' => 'required|string|max:255',
+        ]);
+        $now = now();
+        $foodId = DB::table('food')->insertGetId(array_merge($validated, [
+            'uploaded_by' => (string) $request->user()->user_id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]), 'food_id');
+
+        return response()->json([
+            'food' => DB::table('food')->where('food_id', $foodId)->first(),
+        ], 201);
+    }
+
     public function index(Request $request)
     {
         $meals = DB::table('meals')

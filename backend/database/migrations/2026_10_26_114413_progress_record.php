@@ -26,6 +26,7 @@ return new class extends Migration
         Schema::create('progress_workout_records', function (Blueprint $table) {
             $table->id('progress_workout_id');
             $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
+            $table->foreignId('workout_id')->constrained('workouts', 'workout_id')->onDelete('cascade');
             $table->string('workout_name')->nullable();
             $table->string('workout_type')->nullable();
             $table->string('workout_duration')->nullable();

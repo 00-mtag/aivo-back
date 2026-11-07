@@ -37,6 +37,48 @@ class ProgressController extends Controller
         ], 201);
     }
 
+    public function storeWorkout(Request $request)
+    {
+        $validated = $request->validate([
+            'workout_id' => 'required|integer|exists:workouts,workout_id',
+            'workout_type' => 'nullable|string|max:255',
+            'workout_duration' => 'required|integer|min:0',
+            'exercises_done' => 'required|integer|min:0',
+            'exercises_skipped' => 'required|integer|min:0',
+        ]);
+        $userId = $request->user()->user_id;
+
+        $workout = DB::table('workouts')
+            ->where('workout_id', $validated['workout_id'])
+            ->where('user_id', $userId)
+            ->first();
+
+        if (! $workout) {
+            return response()->json(['message' => 'Workout not found'], 404);
+        }
+
+        $now = now();
+        $progressWorkoutId = DB::table('progress_workout_records')->insertGetId([
+            'user_id' => $userId,
+            'workout_id' => $workout->workout_id,
+            'workout_name' => $workout->plan_name,
+            'workout_type' => $validated['workout_type'] ?? null,
+            'workout_duration' => (string) $validated['workout_duration'],
+            'workout_intensity' => $workout->level,
+            'exercises_done' => (string) $validated['exercises_done'],
+            'exerices_skipped' => (string) $validated['exercises_skipped'],
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], 'progress_workout_id');
+
+        return response()->json([
+            'progress_workout_record' => DB::table('progress_workout_records')
+                ->where('progress_workout_id', $progressWorkoutId)
+                ->where('user_id', $userId)
+                ->first(),
+        ], 201);
+    }
+
     public function show(Request $request, int $progressId)
     {
         $record = DB::table('progress_records')

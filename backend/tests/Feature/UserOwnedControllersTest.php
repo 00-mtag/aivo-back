@@ -142,11 +142,13 @@ class UserOwnedControllersTest extends TestCase
             ],
         ])->assertCreated()
             ->assertJsonPath('workout.user_id', $user->user_id)
+            ->assertJsonPath('workout.plan_name', 'Leg day')
             ->assertJsonPath('workout.exercises.0.name', 'Squat');
         $workoutId = $workoutResponse->json('workout.workout_id');
         $this->patchJson("/api/workouts/{$workoutId}", [
             'name' => 'Updated leg day',
         ])->assertOk()
+            ->assertJsonPath('workout.plan_name', 'Updated leg day')
             ->assertJsonPath('workout.name', 'Updated leg day');
         $this->getJson('/api/workouts')->assertOk()->assertJsonCount(1, 'workouts');
 

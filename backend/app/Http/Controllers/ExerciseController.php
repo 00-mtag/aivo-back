@@ -19,6 +19,7 @@ class ExerciseController extends Controller
         'improve endurance' => 'Improve endurance',
         'maintain' => 'Maintain performance',
         'maintain performance' => 'Maintain performance',
+        'maintain fitness' => 'Maintain performance',
     ];
 
     public function index(Request $request)

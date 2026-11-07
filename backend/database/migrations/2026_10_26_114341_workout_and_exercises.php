@@ -27,10 +27,14 @@ return new class extends Migration
         Schema::create('workouts', function (Blueprint $table) {
             $table->id('workout_id');
             $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
-            $table->string('name');
+            $table->string('plan_name');
             $table->string('description')->nullable();
+            $table->string('goal')->nullable();
+            $table->string('level')->nullable();
+            $table->string('minutes_per_session')->nullable();
             $table->string('duration')->nullable();
             $table->string('notes')->nullable();
+            $table->boolean('active')->default(true);
             $table->timestamps();
         });
         
@@ -38,10 +42,14 @@ return new class extends Migration
             $table->id('workout_exercise_id');
             $table->foreignId('workout_id')->constrained('workouts', 'workout_id')->onDelete('cascade');
             $table->foreignId('exercise_id')->constrained('exercises', 'exercise_id')->onDelete('cascade');
+            $table->string('muscle')->nullable();
+            $table->string('day')->nullable();
             $table->string('sets')->nullable();
             $table->string('reps')->nullable();
             $table->string('weight')->nullable();
             $table->string('rest_seconds')->nullable();
+            $table->string('notes')->nullable();
+            $table->unsignedInteger('sort_order')->default(0);
             $table->timestamps();
         });
     }
