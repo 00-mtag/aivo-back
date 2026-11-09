@@ -42,6 +42,7 @@ class OnboardingProfileTest extends TestCase
             ->assertJsonPath('profile.birth_date', '2004-06-15')
             ->assertJsonPath('profile.experience_level', 'Intermediate')
             ->assertJsonPath('profile.activity_level', 'Moderately active')
+            ->assertJsonPath('profile.tdee', '2320')
             ->assertJsonPath('profile.allergies.0', 'Peanuts')
             ->assertJsonPath('profile.allergies.2', 'Other: Latex')
             ->assertJsonPath('profile.health_conditions.0', 'Diabetes / Pre-Diabetes')
@@ -57,6 +58,7 @@ class OnboardingProfileTest extends TestCase
             'fitness_goal' => 'Build muscle',
             'target_weight' => '72',
             'dietary_preferences' => 'Vegetarian',
+            'tdee' => '2320',
         ]);
         $this->assertDatabaseHas('food_allergies', [
             'user_id' => $user->user_id,
@@ -73,6 +75,28 @@ class OnboardingProfileTest extends TestCase
         $this->assertDatabaseHas('health_conditions', [
             'user_id' => $user->user_id,
             'condition_name' => 'Other: Migraine',
+        ]);
+    }
+
+    public function test_profile_tdee_is_recalculated_when_inputs_change_and_not_taken_from_request(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->putJson('/api/profile', [
+                'gender' => 'Male',
+                'age' => 30,
+                'height' => '180',
+                'weight' => '80',
+                'activity_level' => 'Moderately active',
+                'tdee' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('profile.tdee', '2759');
+
+        $this->assertDatabaseHas('user_profiles', [
+            'user_id' => $user->user_id,
+            'tdee' => '2759',
         ]);
     }
 

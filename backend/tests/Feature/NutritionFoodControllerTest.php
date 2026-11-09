@@ -52,7 +52,7 @@ class NutritionFoodControllerTest extends TestCase
         $this->actingAs($user)
             ->postJson('/api/nutrition/foods', [
                 'name' => 'Chicken bowl',
-                'description' => 'Homemade',
+                'ingredients' => 'Chicken, rice, salt (optional).',
                 'calories' => 320,
                 'protein' => 28,
                 'carbohydrates' => 35,
@@ -63,11 +63,13 @@ class NutritionFoodControllerTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('food.name', 'Chicken bowl')
             ->assertJsonPath('food.uploaded_by', (string) $user->user_id)
+            ->assertJsonPath('food.ingredients', 'Chicken, rice, salt (optional).')
             ->assertJsonPath('food.calories', 320);
 
         $this->assertDatabaseHas('food', [
             'name' => 'Chicken bowl',
             'uploaded_by' => (string) $user->user_id,
+            'ingredients' => 'Chicken, rice, salt (optional).',
         ]);
     }
 

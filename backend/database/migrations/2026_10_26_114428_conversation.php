@@ -39,6 +39,6 @@ return new class extends Migration
     {
         Schema::dropIfExists('conversations');
         Schema::dropIfExists('messages');
-        Schema::dropIfExists('message_replies');
+        Schema::dropIfExists('ai_memory');
     }
 };

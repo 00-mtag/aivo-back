@@ -73,6 +73,9 @@ class UserOwnedControllersTest extends TestCase
             ->assertOk()
             ->assertJsonPath('conversation.user_id', $user->user_id);
         $this->getJson("/api/ai-chat/conversations/{$otherConversationId}")->assertNotFound();
+        $this->deleteJson("/api/ai-chat/conversations/{$otherConversationId}")->assertNotFound();
+        $this->deleteJson("/api/ai-chat/conversations/{$conversationId}")->assertNoContent();
+        $this->assertDatabaseMissing('conversations', ['conversation_id' => $conversationId]);
         $this->postJson('/api/ai-chat/conversations/999999/messages', [
             'content' => 'This conversation is not mine.',
         ])->assertNotFound();

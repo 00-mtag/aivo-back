@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id('food_id');
             $table->string('uploaded_by')->nullable();
             $table->string('name')->unique();
-            $table->string('description')->nullable();
+            $table->text('ingredients')->nullable();
             $table->decimal('calories', 10, 2)->nullable();
             $table->decimal('protein', 10, 2)->nullable();
             $table->decimal('carbohydrates', 10, 2)->nullable();

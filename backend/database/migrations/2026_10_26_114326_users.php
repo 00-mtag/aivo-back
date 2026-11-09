@@ -24,10 +24,11 @@ return new class extends Migration
             $table->string('activity_level')->nullable();
             $table->string('fitness_goal')->nullable();
             $table->string('target_weight')->nullable();
-            $table->binary('profile_picture')->nullable();
+            $table->string('tdee')->nullable();
             $table->text('allergies')->nullable();
             $table->text('medical_conditions')->nullable();
             $table->text('dietary_preferences')->nullable();
+            $table->binary('profile_picture')->nullable();
             $table->timestamps();
         });
         Schema::create('food_allergies', function (Blueprint $table) {

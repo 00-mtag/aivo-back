@@ -24,12 +24,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/exercises', [ExerciseController::class, 'index']);
 
+    Route::post('/ai/chat', [AIChatController::class, 'chat']);
+    Route::post('/ai/workout-plan', [AIChatController::class, 'generateWorkoutPlan']);
     Route::get('/ai-chat/conversations', [AIChatController::class, 'index']);
     Route::post('/ai-chat/conversations', [AIChatController::class, 'store']);
     Route::get('/ai-chat/conversations/{conversationId}', [AIChatController::class, 'show']);
     Route::post('/ai-chat/conversations/{conversationId}/messages', [AIChatController::class, 'storeMessage']);
+    Route::delete('/ai-chat/conversations/{conversationId}', [AIChatController::class, 'destroy']);
 
     Route::get('/nutrition/meals', [NutritionController::class, 'index']);
+    Route::post('/nutrition/ai-week-plan', [NutritionController::class, 'generateAiWeekPlan']);
     Route::post('/nutrition/meals', [NutritionController::class, 'store']);
     Route::get('/nutrition/meals/{mealId}', [NutritionController::class, 'show']);
     Route::match(['put', 'patch'], '/nutrition/meals/{mealId}', [NutritionController::class, 'update']);

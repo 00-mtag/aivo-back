@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +20,7 @@ class ProfileController extends Controller
         'fitness_goal',
         'experience_level',
         'target_weight',
+        'tdee',
         'profile_picture',
         'profile_picture_mime',
         'dietary_preferences',
@@ -41,13 +43,13 @@ class ProfileController extends Controller
     {
         $validated = $request->validate([
             'age' => 'sometimes|nullable|integer|min:0',
-            'gender' => 'sometimes|nullable|string|max:255',
+            'gender' => 'sometimes|nullable|in:Male,Female,Prefer not to say',
             'address' => 'sometimes|nullable|string|max:255',
             'phone_number' => 'sometimes|nullable|string|max:255',
             'birth_date' => 'sometimes|nullable|date|before_or_equal:today',
             'height' => 'sometimes|nullable|string|max:255',
             'weight' => 'sometimes|nullable|string|max:255',
-            'activity_level' => 'sometimes|nullable|string|max:255',
+            'activity_level' => 'sometimes|nullable|in:Sedentary,Lightly active,Moderately active,Very active,Extra active',
             'fitness_goal' => 'sometimes|nullable|string|max:255',
             'experience_level' => 'sometimes|nullable|string|max:255',
             'target_weight' => 'sometimes|nullable|string|max:255',
@@ -75,6 +77,14 @@ class ProfileController extends Controller
         }
         unset($validated['allergies'], $validated['health_conditions'], $validated['allergies_present'], $validated['health_conditions_present']);
         $attributes = array_intersect_key($validated, array_flip(self::PROFILE_FIELDS));
+        $tdeeInputs = ['age', 'birth_date', 'gender', 'height', 'weight', 'activity_level'];
+        if (array_intersect($tdeeInputs, array_keys($validated)) !== []) {
+            $profileValues = array_merge(
+                $profile ? (array) $profile : [],
+                array_intersect_key($validated, array_flip($tdeeInputs))
+            );
+            $attributes['tdee'] = $this->calculateTdee($profileValues);
+        }
         if ($picture) {
             $attributes['profile_picture'] = file_get_contents($picture->getRealPath());
             $attributes['profile_picture_mime'] = $picture->getMimeType();
@@ -122,6 +132,57 @@ class ProfileController extends Controller
             'message' => 'Profile updated successfully',
             'profile' => $this->presentProfile(DB::table('user_profiles')->where('user_id', $userId)->first(), $userId),
         ]);
+    }
+
+    private function calculateTdee(array $profile): ?int
+    {
+        $age = $profile['age'] ?? null;
+        if (($age === null || $age === '') && ! empty($profile['birth_date'])) {
+            $age = Carbon::parse($profile['birth_date'])->age;
+        }
+        $weight = $this->metricValue($profile['weight'] ?? null, 'lb', 0.45359237);
+        $height = $this->metricValue($profile['height'] ?? null, 'in', 2.54);
+        $gender = $profile['gender'] ?? null;
+        $multipliers = [
+            'Sedentary' => 1.2,
+            'Lightly active' => 1.375,
+            'Moderately active' => 1.55,
+            'Very active' => 1.725,
+            'Extra active' => 1.9,
+        ];
+        $multiplier = $multipliers[$profile['activity_level'] ?? ''] ?? null;
+
+        if (! is_numeric($age) || $age < 13 || $age > 120
+            || $weight === null || $weight < 20 || $weight > 350
+            || $height === null || $height < 100 || $height > 250
+            || $multiplier === null
+            || ! in_array($gender, ['Male', 'Female', 'Prefer not to say'], true)) {
+            return null;
+        }
+
+        $genderAdjustment = match ($gender) {
+            'Male' => 5,
+            'Female' => -161,
+            default => -78,
+        };
+        $bmr = 10 * $weight + 6.25 * $height - 5 * $age + $genderAdjustment;
+
+        return (int) round($bmr * $multiplier);
+    }
+
+    private function metricValue(mixed $value, string $unit, float $conversion): ?float
+    {
+        if (! is_string($value) && ! is_numeric($value)) {
+            return null;
+        }
+        if (! preg_match('/-?\d+(?:\.\d+)?/', (string) $value, $matches)) {
+            return null;
+        }
+
+        $number = (float) $matches[0];
+        $isImperial = preg_match('/\b'.preg_quote($unit, '/').'(?:s|\\b)/i', (string) $value) === 1;
+
+        return $isImperial ? $number * $conversion : $number;
     }
 
     private function presentProfile(?object $profile, int $userId): ?object

@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'ai_gateway' => [
+        'url' => env('AI_GATEWAY_URL'),
+        'key' => env('AI_GATEWAY_API_KEY'),
+    ],
+
 ];

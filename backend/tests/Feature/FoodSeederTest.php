@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\FoodSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -12,9 +11,9 @@ class FoodSeederTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_default_database_seeder_includes_the_food_catalog(): void
+    public function test_food_seeder_includes_the_food_catalog_and_ingredients(): void
     {
-        $this->seed(DatabaseSeeder::class);
+        $this->seed(FoodSeeder::class);
 
         $foodCount = DB::table('food')->count();
         $this->assertGreaterThanOrEqual(130, $foodCount);
@@ -26,6 +25,10 @@ class FoodSeederTest extends TestCase
         $this->assertDatabaseHas('food', [
             'name' => 'Pandesal',
             'calories' => 130,
+        ]);
+        $this->assertDatabaseHas('food', [
+            'name' => 'Lugaw',
+            'ingredients' => 'Rice, water or broth, salt (optional), chicken meat (optional), ginger (optional).',
         ]);
         $this->assertDatabaseHas('food', [
             'name' => 'Century Tuna lite in water',
