@@ -48,6 +48,19 @@ class ExerciseSeederTest extends TestCase
         $this->assertDatabaseHas('exercises', [
             'name' => 'Treadmill Walk',
             'best_for' => 'Lose weight, Improve endurance, Maintain performance',
+            'weightORduration' => 'duration',
+        ]);
+        $this->assertDatabaseHas('exercises', [
+            'name' => 'Plank',
+            'weightORduration' => 'duration',
+        ]);
+        $this->assertDatabaseHas('exercises', [
+            'name' => 'Barbell Bench Press',
+            'weightORduration' => 'weight',
+        ]);
+        $this->assertDatabaseHas('exercises', [
+            'name' => 'Jump Rope',
+            'weightORduration' => 'duration',
         ]);
 
         $seeder->run();
@@ -122,7 +135,7 @@ class ExerciseSeederTest extends TestCase
         $this->actingAs($user)
             ->getJson('/api/exercises')
             ->assertOk()
-            ->assertJsonCount(73, 'exercises')
+            ->assertJsonCount(77, 'exercises')
             ->assertJsonPath('exercises.0.name', 'Assisted Pull-Up')
             ->assertJsonPath('exercises.0.best_for', 'Build muscle, Maintain performance')
             ->assertJsonStructure([
@@ -132,6 +145,7 @@ class ExerciseSeederTest extends TestCase
                         'name',
                         'description',
                         'muscle_group',
+                        'weightORduration',
                         'equipment',
                         'difficulty',
                         'instructions',
@@ -145,6 +159,7 @@ class ExerciseSeederTest extends TestCase
     {
         $this->seed(ExerciseSeeder::class);
         $exerciseId = DB::table('exercises')->where('name', 'Push-Up')->value('exercise_id');
+        $plankId = DB::table('exercises')->where('name', 'Plank')->value('exercise_id');
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)
@@ -155,13 +170,17 @@ class ExerciseSeederTest extends TestCase
                 'minutes_per_session' => '30',
                 'duration' => '4 weeks',
                 'exercises' => [
-                    ['day' => 'Mon', 'exercise_id' => $exerciseId, 'sets' => '3', 'reps' => '10', 'notes' => 'Keep a steady pace', 'sort_order' => 0],
-                    ['day' => 'Wed', 'exercise_id' => $exerciseId, 'sets' => '4', 'reps' => '8', 'sort_order' => 0],
+                    ['day' => 'Mon', 'exercise_id' => $exerciseId, 'sets' => '3', 'reps' => '10', 'weight' => '20 kg', 'notes' => 'Keep a steady pace', 'sort_order' => 0],
+                    ['day' => 'Wed', 'exercise_id' => $plankId, 'sets' => '4', 'reps' => '10', 'duration' => '30', 'sort_order' => 0],
                 ],
             ])
             ->assertCreated()
             ->assertJsonPath('workout.exercises.0.day', 'Mon')
             ->assertJsonPath('workout.exercises.0.notes', 'Keep a steady pace')
+            ->assertJsonPath('workout.exercises.0.weight', '20 kg')
+            ->assertJsonPath('workout.exercises.0.weightORduration', 'weight')
+            ->assertJsonPath('workout.exercises.1.duration', '30')
+            ->assertJsonPath('workout.exercises.1.weightORduration', 'duration')
             ->assertJsonPath('workout.exercises.1.day', 'Wed');
 
         $workoutId = $response->json('workout.workout_id');
@@ -170,6 +189,12 @@ class ExerciseSeederTest extends TestCase
             'exercise_id' => $exerciseId,
             'day' => 'Mon',
             'notes' => 'Keep a steady pace',
+        ]);
+        $this->assertDatabaseHas('workout_exercises', [
+            'workout_id' => $workoutId,
+            'exercise_id' => $plankId,
+            'day' => 'Wed',
+            'duration' => '30',
         ]);
 
         $this->actingAs($user)

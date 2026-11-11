@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\DB;
 class ProfileController extends Controller
 {
     private const PROFILE_FIELDS = [
-        'age',
         'gender',
         'address',
         'phone_number',
@@ -42,7 +41,6 @@ class ProfileController extends Controller
     public function update(Request $request)
     {
         $validated = $request->validate([
-            'age' => 'sometimes|nullable|integer|min:0',
             'gender' => 'sometimes|nullable|in:Male,Female,Prefer not to say',
             'address' => 'sometimes|nullable|string|max:255',
             'phone_number' => 'sometimes|nullable|string|max:255',
@@ -77,7 +75,7 @@ class ProfileController extends Controller
         }
         unset($validated['allergies'], $validated['health_conditions'], $validated['allergies_present'], $validated['health_conditions_present']);
         $attributes = array_intersect_key($validated, array_flip(self::PROFILE_FIELDS));
-        $tdeeInputs = ['age', 'birth_date', 'gender', 'height', 'weight', 'activity_level'];
+        $tdeeInputs = ['birth_date', 'gender', 'height', 'weight', 'activity_level'];
         if (array_intersect($tdeeInputs, array_keys($validated)) !== []) {
             $profileValues = array_merge(
                 $profile ? (array) $profile : [],
@@ -136,10 +134,7 @@ class ProfileController extends Controller
 
     private function calculateTdee(array $profile): ?int
     {
-        $age = $profile['age'] ?? null;
-        if (($age === null || $age === '') && ! empty($profile['birth_date'])) {
-            $age = Carbon::parse($profile['birth_date'])->age;
-        }
+        $age = ! empty($profile['birth_date']) ? Carbon::parse($profile['birth_date'])->age : null;
         $weight = $this->metricValue($profile['weight'] ?? null, 'lb', 0.45359237);
         $height = $this->metricValue($profile['height'] ?? null, 'in', 2.54);
         $gender = $profile['gender'] ?? null;
@@ -190,6 +185,8 @@ class ProfileController extends Controller
         if (! $profile) {
             return null;
         }
+
+        $profile->age = $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null;
 
         if ($profile->profile_picture !== null) {
             $profile->profile_picture = 'data:'.$profile->profile_picture_mime.';base64,'.base64_encode($profile->profile_picture);

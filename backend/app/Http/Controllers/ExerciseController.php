@@ -30,6 +30,7 @@ class ExerciseController extends Controller
                 'name',
                 'description',
                 'muscle_group',
+                'weightORduration',
                 'equipment',
                 'difficulty',
                 'instructions',

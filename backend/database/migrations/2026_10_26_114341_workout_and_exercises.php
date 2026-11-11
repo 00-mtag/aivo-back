@@ -17,7 +17,9 @@ return new class extends Migration
             $table->string('created_by')->nullable();
             $table->string('description')->nullable();
             $table->string('muscle_group')->nullable();
+            $table->string('weightORduration')->nullable();
             $table->string('equipment')->nullable();
+            $table->string('activity')->nullable();
             $table->string('difficulty')->nullable();
             $table->string('instructions')->nullable();
             $table->string('best_for')->nullable();
@@ -47,6 +49,7 @@ return new class extends Migration
             $table->string('sets')->nullable();
             $table->string('reps')->nullable();
             $table->string('weight')->nullable();
+            $table->string('duration')->nullable();
             $table->string('rest_seconds')->nullable();
             $table->string('notes')->nullable();
             $table->unsignedInteger('sort_order')->default(0);

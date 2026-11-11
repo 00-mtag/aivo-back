@@ -132,7 +132,7 @@ class AIChatGatewayTest extends TestCase
         $user = User::factory()->create();
         DB::table('user_profiles')->insert([
             'user_id' => $user->user_id,
-            'age' => 28,
+            'birth_date' => now()->subYears(28)->toDateString(),
             'height' => '170 cm',
             'weight' => '70 kg',
             'activity_level' => 'Moderate',
@@ -180,6 +180,130 @@ class AIChatGatewayTest extends TestCase
         );
     }
 
+    public function test_workout_plan_returns_duration_targets_for_timed_catalog_exercises(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        $plankId = DB::table('exercises')->insertGetId([
+            'name' => 'Plank',
+            'muscle_group' => 'Core',
+            'weightORduration' => 'duration',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'exercise_id');
+        $squatId = DB::table('exercises')->insertGetId([
+            'name' => 'Bodyweight Squat',
+            'muscle_group' => 'Legs',
+            'weightORduration' => 'weight',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'exercise_id');
+        Http::fake(fn () => Http::response(['message' => json_encode([
+            'name' => 'Core and Legs',
+            'exercises' => [
+                ['exercise_id' => $plankId, 'day' => 'Mon', 'sets' => 3, 'reps' => '10', 'duration' => 45],
+                ['exercise_id' => $squatId, 'day' => 'Mon', 'sets' => 3, 'reps' => '10'],
+            ],
+        ])]));
+
+        $this->actingAs(User::factory()->create())
+            ->postJson('/api/ai/workout-plan', [
+                'goal' => 'Improve endurance',
+                'include_profile' => false,
+                'schedule_days' => ['Mon'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('plan.exercises.0.weightORduration', 'duration')
+            ->assertJsonPath('plan.exercises.0.duration', '45')
+            ->assertJsonPath('plan.exercises.1.weightORduration', 'weight')
+            ->assertJsonPath('plan.exercises.1.duration', '');
+
+        Http::assertSent(fn (Request $request) => str_contains(
+            $request['messages'][1]['content'],
+            '"weightORduration":"duration"'
+        ));
+    }
+
+    public function test_workout_plan_targets_exercise_count_to_profile_activity_level(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        $exerciseIds = [];
+        for ($index = 1; $index <= 12; $index++) {
+            $exerciseIds[] = DB::table('exercises')->insertGetId([
+                'name' => "Exercise {$index}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], 'exercise_id');
+        }
+
+        $user = User::factory()->create();
+        DB::table('user_profiles')->insert([
+            'user_id' => $user->user_id,
+            'activity_level' => 'Sedentary',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        Http::fake(function (Request $request) use ($exerciseIds) {
+            $prompt = json_decode($request['messages'][1]['content'], true);
+            $count = $prompt['exercise_count_per_day']['target'];
+
+            return Http::response(['message' => json_encode([
+                'name' => 'Activity Based Plan',
+                'exercises' => array_map(fn ($exerciseId) => [
+                    'exercise_id' => $exerciseId,
+                    'day' => 'Mon',
+                    'sets' => 3,
+                    'reps' => '10',
+                ], array_slice($exerciseIds, 0, $count)),
+            ])]);
+        });
+
+        $levels = [
+            'Sedentary' => 2,
+            'Lightly active' => 4,
+            'Moderately active' => 6,
+            'Very active' => 8,
+            'Extra active' => 10,
+        ];
+        foreach ($levels as $activityLevel => $expectedCount) {
+            DB::table('user_profiles')
+                ->where('user_id', $user->user_id)
+                ->update(['activity_level' => $activityLevel]);
+
+            $this->actingAs($user)
+                ->postJson('/api/ai/workout-plan', [
+                    'goal' => 'Build muscle',
+                    'include_profile' => true,
+                    'schedule_days' => ['Mon'],
+                ])
+                ->assertOk()
+                ->assertJsonCount($expectedCount, 'plan.exercises');
+        }
+
+        $this->actingAs($user)
+            ->postJson('/api/ai/workout-plan', [
+                'goal' => 'Build muscle',
+                'include_profile' => false,
+                'activity_level' => 'Very active',
+                'schedule_days' => ['Mon'],
+            ])
+            ->assertOk()
+            ->assertJsonCount(8, 'plan.exercises');
+
+        Http::assertSent(fn (Request $request) => str_contains(
+            $request['messages'][1]['content'],
+            '"activity_level_for_plan":"Very active"'
+        ) && str_contains(
+            $request['messages'][1]['content'],
+            '"exercise_count_per_day":{"min":7,"max":8,"target":8}'
+        ) && str_contains($request['messages'][1]['content'], '"profile":[]'));
+    }
+
     public function test_workout_plan_includes_only_approved_profile_fields_and_rejects_non_catalog_exercises(): void
     {
         config([
@@ -194,7 +318,7 @@ class AIChatGatewayTest extends TestCase
         $user = User::factory()->create();
         DB::table('user_profiles')->insert([
             'user_id' => $user->user_id,
-            'age' => 28,
+            'birth_date' => now()->subYears(28)->toDateString(),
             'height' => '170 cm',
             'weight' => '70 kg',
             'activity_level' => 'Moderate',
@@ -222,7 +346,7 @@ class AIChatGatewayTest extends TestCase
                 'schedule_days' => ['Mon'],
             ])
             ->assertStatus(502)
-            ->assertJsonPath('message', 'The AI service returned an invalid workout plan. Please try again.');
+            ->assertJsonPath('message', 'The AI plan included an exercise that is not in the app catalog. Please try again.');
 
         Http::assertSent(fn (Request $request) => str_contains($request['messages'][1]['content'], '"age":28')
             && str_contains($request['messages'][1]['content'], '"schedule_days":["Mon"]')
@@ -235,7 +359,7 @@ class AIChatGatewayTest extends TestCase
         );
     }
 
-    public function test_workout_plan_rejects_more_than_three_exercises_per_selected_day(): void
+    public function test_workout_plan_rejects_exercise_counts_outside_the_activity_target(): void
     {
         config([
             'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
@@ -266,33 +390,84 @@ class AIChatGatewayTest extends TestCase
                 'schedule_days' => ['Mon'],
             ])
             ->assertStatus(502)
-            ->assertJsonPath('message', 'The AI service returned an invalid workout plan. Please try again.');
+            ->assertJsonPath('message', 'The AI plan included duplicate exercises or exceeded the activity-level limit. Please try again.');
     }
 
-    public function test_workout_plan_requires_multiple_exercises_on_each_selected_day(): void
+    public function test_workout_plan_accepts_any_exercise_count_within_activity_range(): void
     {
         config([
             'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
             'services.ai_gateway.key' => 'test-key',
         ]);
-        $exerciseId = DB::table('exercises')->insertGetId([
-            'name' => 'Squat',
+        $exerciseIds = [];
+        for ($index = 1; $index <= 7; $index++) {
+            $exerciseIds[] = DB::table('exercises')->insertGetId([
+                'name' => "Exercise {$index}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], 'exercise_id');
+        }
+        $user = User::factory()->create();
+        DB::table('user_profiles')->insert([
+            'user_id' => $user->user_id,
+            'activity_level' => 'Moderately active',
             'created_at' => now(),
             'updated_at' => now(),
-        ], 'exercise_id');
+        ]);
+        Http::fake(function (Request $request) use ($exerciseIds) {
+            $prompt = json_decode($request['messages'][1]['content'], true);
+
+            return Http::response(['message' => json_encode([
+                'name' => 'Flexible Activity Plan',
+                'exercises' => array_map(fn ($exerciseId) => [
+                    'exercise_id' => $exerciseId,
+                    'day' => 'Mon',
+                    'sets' => 3,
+                    'reps' => 10,
+                ], array_slice($exerciseIds, 0, $prompt['exercise_count_per_day']['min'])),
+            ])]);
+        });
+
+        $this->actingAs($user)
+            ->postJson('/api/ai/workout-plan', [
+                'goal' => 'Build muscle',
+                'include_profile' => true,
+                'schedule_days' => ['Mon'],
+            ])
+            ->assertOk()
+            ->assertJsonCount(5, 'plan.exercises');
+    }
+
+    public function test_workout_plan_fills_missing_exercises_from_catalog_to_meet_activity_minimum(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        $exerciseIds = [];
+        for ($index = 1; $index <= 7; $index++) {
+            $exerciseIds[] = DB::table('exercises')->insertGetId([
+                'name' => "Exercise {$index}",
+                'best_for' => 'Build muscle',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], 'exercise_id');
+        }
         Http::fake(fn () => Http::response(['message' => json_encode([
             'name' => 'Leg Day',
-            'exercises' => [['exercise_id' => $exerciseId, 'day' => 'Mon', 'sets' => 3, 'reps' => '10']],
+            'exercises' => [['exercise_id' => $exerciseIds[0], 'day' => 'Mon', 'sets' => 3, 'reps' => '10']],
         ])]));
 
         $this->actingAs(User::factory()->create())
             ->postJson('/api/ai/workout-plan', [
                 'goal' => 'Build muscle',
                 'include_profile' => false,
+                'activity_level' => 'Moderately active',
                 'schedule_days' => ['Mon'],
             ])
-            ->assertStatus(502)
-            ->assertJsonPath('message', 'The AI service returned an invalid workout plan. Please try again.');
+            ->assertOk()
+            ->assertJsonCount(5, 'plan.exercises')
+            ->assertJsonPath('plan.exercises.0.exercise_id', $exerciseIds[0]);
     }
 
     public function test_chat_reports_a_non_json_gateway_response_as_a_url_configuration_error(): void

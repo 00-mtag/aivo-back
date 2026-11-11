@@ -32,9 +32,28 @@ return new class extends Migration
             $table->string('workout_duration')->nullable();
             $table->string('workout_intensity')->nullable();
             $table->string('exercises_done')->nullable();
-            $table->string('exerices_skipped')->nullable();
+            $table->string('exercises_skipped')->nullable();
             $table->timestamps();
         });
+
+        Schema::create('calorie_burned_records', function (Blueprint $table) {
+            $table->id('calorie_burned_id');
+            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
+            $table->foreignId('workout_id')->constrained('workouts', 'workout_id')->onDelete('cascade');
+            $table->foreignId('exercise_id')->constrained('exercises', 'exercise_id')->onDelete('cascade');
+            $table->string('calories_burned')->nullable();
+            $table->timestamps();
+        });
+        
+        Schema::create('calorie_intake_records', function (Blueprint $table) {
+            $table->id('calorie_intake_id');
+            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
+            $table->foreignId('meal_id')->constrained('meals', 'meal_id')->onDelete('cascade');
+            $table->foreignId('food_id')->constrained('food', 'food_id')->onDelete('cascade');
+            $table->string('calories_intake')->nullable();
+            $table->timestamps();
+        });
+
     }
 
     /**
@@ -42,6 +61,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('calorie_intake_records');
+        Schema::dropIfExists('calorie_burned_records');
+        Schema::dropIfExists('progress_workout_records');
         Schema::dropIfExists('progress_records');
     }
 };

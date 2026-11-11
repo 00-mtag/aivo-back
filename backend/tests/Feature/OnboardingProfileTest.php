@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -14,6 +15,7 @@ class OnboardingProfileTest extends TestCase
 
     public function test_onboarding_profile_fields_and_image_are_saved_for_the_authenticated_user(): void
     {
+        Carbon::setTestNow('2026-11-11 12:00:00');
         $user = User::factory()->create();
         $picture = UploadedFile::fake()
             ->createWithContent('profile.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg=='))
@@ -22,7 +24,6 @@ class OnboardingProfileTest extends TestCase
         $this->actingAs($user)
             ->post('/api/profile', [
                 '_method' => 'PUT',
-                'age' => 22,
                 'gender' => 'Female',
                 'phone_number' => '09171234567',
                 'birth_date' => '2004-06-15',
@@ -39,6 +40,7 @@ class OnboardingProfileTest extends TestCase
             ], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('profile.user_id', $user->user_id)
+            ->assertJsonPath('profile.age', 22)
             ->assertJsonPath('profile.birth_date', '2004-06-15')
             ->assertJsonPath('profile.experience_level', 'Intermediate')
             ->assertJsonPath('profile.activity_level', 'Moderately active')
@@ -52,6 +54,7 @@ class OnboardingProfileTest extends TestCase
 
         $stored = DB::table('user_profiles')->where('user_id', $user->user_id)->first();
         $this->assertSame(file_get_contents($picture->getRealPath()), $stored->profile_picture);
+        $this->assertFalse(array_key_exists('age', (array) $stored));
         $this->assertDatabaseHas('user_profiles', [
             'user_id' => $user->user_id,
             'phone_number' => '09171234567',
@@ -80,24 +83,29 @@ class OnboardingProfileTest extends TestCase
 
     public function test_profile_tdee_is_recalculated_when_inputs_change_and_not_taken_from_request(): void
     {
+        Carbon::setTestNow('2026-11-11 12:00:00');
         $user = User::factory()->create();
 
         $this->actingAs($user)
             ->putJson('/api/profile', [
                 'gender' => 'Male',
-                'age' => 30,
+                'birth_date' => '1996-11-11',
+                'age' => 5,
                 'height' => '180',
                 'weight' => '80',
                 'activity_level' => 'Moderately active',
                 'tdee' => 1,
             ])
             ->assertOk()
+            ->assertJsonPath('profile.age', 30)
             ->assertJsonPath('profile.tdee', '2759');
 
         $this->assertDatabaseHas('user_profiles', [
             'user_id' => $user->user_id,
             'tdee' => '2759',
+            'birth_date' => '1996-11-11',
         ]);
+        $this->assertFalse(array_key_exists('age', (array) DB::table('user_profiles')->where('user_id', $user->user_id)->first()));
     }
 
     public function test_profile_image_must_be_a_supported_image_under_five_megabytes(): void

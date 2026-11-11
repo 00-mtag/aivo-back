@@ -84,6 +84,9 @@ class AiNutritionWeekPlanTest extends TestCase
         $this->actingAs($user)
             ->postJson('/api/nutrition/ai-week-plan', [
                 'daily_calories' => 2050,
+                'daily_protein' => 110,
+                'daily_carbohydrates' => 250,
+                'daily_fat' => 50,
                 'start_date' => '2026-11-09',
                 'goal' => 'Maintain fitness',
             ])
@@ -92,10 +95,19 @@ class AiNutritionWeekPlanTest extends TestCase
             ->assertJsonPath('nutrition_goal.daily_calories', 2050)
             ->assertJsonPath('meals.0.items.0.food_id', $foodId)
             ->assertJsonPath('meals.0.items.0.calories', 500)
-            ->assertJsonPath('meals.0.items.0.protein', 25);
+            ->assertJsonPath('meals.0.items.0.protein', 25)
+            ->assertJsonPath('nutrition_goal.daily_protein', 110)
+            ->assertJsonPath('nutrition_goal.daily_carbohydrates', 250)
+            ->assertJsonPath('nutrition_goal.daily_fat', 50);
 
         $this->assertDatabaseCount('meals', 28);
         $this->assertDatabaseCount('meal_items', 28);
+        $this->assertDatabaseCount('calorie_intake_records', 28);
+        $this->assertDatabaseHas('calorie_intake_records', [
+            'user_id' => $user->user_id,
+            'food_id' => $foodId,
+            'calories_intake' => '500',
+        ]);
         $this->assertDatabaseHas('nutrition_goal', [
             'user_id' => $user->user_id,
             'daily_calories' => 2050,
@@ -106,15 +118,146 @@ class AiNutritionWeekPlanTest extends TestCase
             $prompt = json_decode($request['messages'][1]['content'], true);
 
             return $prompt['daily_calorie_target'] === 2050
+                && $prompt['daily_macro_targets'] === ['protein' => 110, 'carbohydrates' => 250, 'fat' => 50]
                 && $prompt['description'] === 'Recommend daily kcal/day for Maintain fitness = 2050 kcal'
                 && $prompt['food_catalog'][0]['name'] === 'Rice bowl'
                 && $prompt['food_catalog'][0]['ingredients'] === 'Rice, salt (optional).'
+                && $prompt['food_catalog'][0]['protein'] == 25
+                && $prompt['food_catalog'][0]['carbohydrates'] == 60
+                && $prompt['food_catalog'][0]['fat'] == 10
                 && $prompt['allergies'] === ['Peanuts']
                 && $prompt['dietary_preferences'] === 'Vegetarian'
                 && ! str_contains($request['messages'][1]['content'], 'Private allergy')
                 && ! str_contains($request['messages'][1]['content'], 'Private dietary preference')
                 && ! str_contains($request['messages'][1]['content'], 'Other user private food');
         });
+    }
+
+    public function test_ai_week_plan_keeps_calories_in_range_when_macro_targets_are_too_low(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        $lowMacroEfficiencyFoodId = DB::table('food')->insertGetId([
+            'name' => 'Carbohydrate-heavy food',
+            'calories' => 100,
+            'protein' => 0,
+            'carbohydrates' => 20,
+            'fat' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'food_id');
+        $dates = [];
+        for ($offset = 0; $offset < 7; $offset++) {
+            $date = Carbon::parse('2026-11-09')->addDays($offset)->toDateString();
+            $dates[] = [
+                'date' => $date,
+                'meals' => array_map(fn ($type) => [
+                    'meal_type' => $type,
+                    'items' => [['food_id' => $lowMacroEfficiencyFoodId, 'quantity' => 1]],
+                ], ['Breakfast', 'Lunch', 'Dinner', 'Snack']),
+            ];
+        }
+        Http::fake(fn () => Http::response(['message' => json_encode(['days' => $dates])]));
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/api/nutrition/ai-week-plan', [
+                'daily_calories' => 2000,
+                'daily_protein' => 100,
+                'daily_carbohydrates' => 100,
+                'daily_fat' => 100,
+                'start_date' => '2026-11-09',
+                'goal' => 'Maintain fitness',
+            ])
+            ->assertOk()
+            ->assertJsonCount(28, 'meals');
+
+        foreach (array_chunk($response->json('meals'), 4) as $dayMeals) {
+            $dailyCalories = array_sum(array_map(
+                fn ($meal) => array_sum(array_column($meal['items'], 'calories')),
+                $dayMeals
+            ));
+            $dailyCarbs = array_sum(array_map(
+                fn ($meal) => array_sum(array_column($meal['items'], 'carbohydrates')),
+                $dayMeals
+            ));
+            $this->assertGreaterThanOrEqual(1600, $dailyCalories);
+            $this->assertLessThanOrEqual(2400, $dailyCalories);
+            $this->assertGreaterThan(100, $dailyCarbs);
+        }
+
+        Http::assertSentCount(1);
+        $this->assertDatabaseCount('meals', 28);
+    }
+
+    public function test_ai_week_plan_adjusts_servings_to_keep_daily_macros_within_targets(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        $highCarbFoodId = DB::table('food')->insertGetId([
+            'name' => 'High-carb food',
+            'calories' => 300,
+            'protein' => 5,
+            'carbohydrates' => 60,
+            'fat' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'food_id');
+        $balancedFoodId = DB::table('food')->insertGetId([
+            'name' => 'Balanced food',
+            'calories' => 300,
+            'protein' => 20,
+            'carbohydrates' => 10,
+            'fat' => 10,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'food_id');
+
+        $days = [];
+        for ($offset = 0; $offset < 7; $offset++) {
+            $days[] = [
+                'date' => Carbon::parse('2026-11-09')->addDays($offset)->toDateString(),
+                'meals' => array_map(fn ($type) => [
+                    'meal_type' => $type,
+                    'items' => [
+                        ['food_id' => $highCarbFoodId, 'quantity' => 2],
+                        ['food_id' => $balancedFoodId, 'quantity' => 1],
+                    ],
+                ], ['Breakfast', 'Lunch', 'Dinner', 'Snack']),
+            ];
+        }
+        Http::fake(fn () => Http::response(['message' => json_encode(['days' => $days])]));
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson('/api/nutrition/ai-week-plan', [
+                'daily_calories' => 2000,
+                'daily_protein' => 210,
+                'daily_carbohydrates' => 200,
+                'daily_fat' => 100,
+                'start_date' => '2026-11-09',
+                'goal' => 'Build muscle',
+            ])
+            ->assertOk();
+
+        $items = $response->json('meals');
+        foreach (array_chunk($items, 4) as $dayMeals) {
+            $dayMacros = array_reduce($dayMeals, function (array $totals, array $meal): array {
+                foreach ($meal['items'] as $item) {
+                    foreach (['protein', 'carbohydrates', 'fat'] as $macro) {
+                        $totals[$macro] += (float) $item[$macro];
+                    }
+                }
+
+                return $totals;
+            }, ['protein' => 0, 'carbohydrates' => 0, 'fat' => 0]);
+
+            $this->assertLessThanOrEqual(210, $dayMacros['protein']);
+            $this->assertLessThanOrEqual(200, $dayMacros['carbohydrates']);
+            $this->assertLessThanOrEqual(100, $dayMacros['fat']);
+        }
     }
 
     public function test_ai_week_plan_rejects_foods_not_in_the_user_available_catalog(): void

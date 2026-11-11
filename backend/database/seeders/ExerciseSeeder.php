@@ -75,6 +75,9 @@ class ExerciseSeeder extends Seeder
         'Improve endurance, Maintain performance' => [
             'Plank',
             'Side Plank',
+            'Hollow Body Hold',
+            'Glute Bridge Hold',
+            'Superman Hold',
             'Dead Bug',
             'Bird Dog',
             'Bicycle Crunch',
@@ -86,6 +89,7 @@ class ExerciseSeeder extends Seeder
         'Lose weight, Improve endurance, Maintain performance' => [
             'Jumping Jack',
             'High Knees',
+            'Jump Rope',
             'Treadmill Walk',
             'Stationary Bike',
             'Elliptical Trainer',
@@ -167,6 +171,26 @@ class ExerciseSeeder extends Seeder
         ['name' => 'Stationary Bike', 'description' => 'A low-impact cardiovascular exercise on a stationary bicycle.', 'muscle_group' => 'Legs, cardiovascular', 'equipment' => 'Stationary bike', 'difficulty' => 'Beginner', 'instructions' => 'Adjust the seat so your knee remains slightly bent at the bottom of each pedal stroke, then cycle comfortably.'],
         ['name' => 'Elliptical Trainer', 'description' => 'A low-impact cardio workout using an elliptical machine.', 'muscle_group' => 'Full body, cardiovascular', 'equipment' => 'Elliptical machine', 'difficulty' => 'Beginner', 'instructions' => 'Stand upright, hold the handles as desired, and move the pedals smoothly at a sustainable pace.'],
         ['name' => 'Rowing Machine', 'description' => 'A full-body cardio exercise using a rowing ergometer.', 'muscle_group' => 'Legs, back, arms, cardiovascular', 'equipment' => 'Rowing machine', 'difficulty' => 'Beginner', 'instructions' => 'Drive with your legs first, lean back slightly, then draw the handle toward your torso; reverse the sequence to return.'],
+        ['name' => 'Hollow Body Hold', 'description' => 'A core isometric hold performed while lying on your back.', 'muscle_group' => 'Core', 'equipment' => 'Bodyweight (home or gym)', 'difficulty' => 'Intermediate', 'instructions' => 'Lie on your back, brace your core, lift your shoulders and legs slightly, and hold while keeping your lower back supported.'],
+        ['name' => 'Glute Bridge Hold', 'description' => 'An isometric glute exercise held at the top of a bridge.', 'muscle_group' => 'Glutes, hamstrings', 'equipment' => 'Bodyweight (home or gym)', 'difficulty' => 'Beginner', 'instructions' => 'Lie on your back with knees bent, lift your hips by squeezing your glutes, and hold without arching your lower back.'],
+        ['name' => 'Superman Hold', 'description' => 'A back-focused isometric hold performed on the floor.', 'muscle_group' => 'Back, glutes', 'equipment' => 'Bodyweight (home or gym)', 'difficulty' => 'Beginner', 'instructions' => 'Lie face down, gently lift your arms and legs, and hold while keeping your neck neutral.'],
+        ['name' => 'Jump Rope', 'description' => 'A timed cardiovascular exercise using a skipping rope.', 'muscle_group' => 'Full body, cardiovascular', 'equipment' => 'Jump rope', 'difficulty' => 'Beginner', 'instructions' => 'Turn the rope with your wrists and make small, controlled jumps at a comfortable pace.'],
+    ];
+
+    private const DURATION_EXERCISES = [
+        'Wall Sit',
+        'Plank',
+        'Side Plank',
+        'Hollow Body Hold',
+        'Glute Bridge Hold',
+        'Superman Hold',
+        'Jumping Jack',
+        'High Knees',
+        'Jump Rope',
+        'Treadmill Walk',
+        'Stationary Bike',
+        'Elliptical Trainer',
+        'Rowing Machine',
     ];
 
     public function run(): void
@@ -190,6 +214,7 @@ class ExerciseSeeder extends Seeder
                 [
                     ...$exercise,
                     'created_by' => null,
+                    'weightORduration' => in_array($exercise['name'], self::DURATION_EXERCISES, true) ? 'duration' : 'weight',
                     'best_for' => $bestForByExercise[$exercise['name']],
                     'created_at' => $now,
                     'updated_at' => $now,

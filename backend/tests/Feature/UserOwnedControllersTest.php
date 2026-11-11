@@ -89,6 +89,7 @@ class UserOwnedControllersTest extends TestCase
 
         $foodId = DB::table('food')->insertGetId([
             'name' => 'Oats',
+            'calories' => 150,
             'created_at' => now(),
             'updated_at' => now(),
         ], 'food_id');
@@ -97,17 +98,33 @@ class UserOwnedControllersTest extends TestCase
             'meal_type' => 'breakfast',
             'meal_date' => '2026-10-30',
             'items' => [
-                ['food_id' => $foodId, 'quantity' => 1, 'calories' => 150],
+                ['food_id' => $foodId, 'quantity' => 1.5, 'calories' => 225],
             ],
         ])->assertCreated()
             ->assertJsonPath('meal.user_id', $user->user_id)
-            ->assertJsonPath('meal.items.0.food_name', 'Oats');
+            ->assertJsonPath('meal.items.0.food_name', 'Oats')
+            ->assertJsonPath('meal.items.0.quantity', 1.5);
         $mealId = $mealResponse->json('meal.meal_id');
+        $this->assertDatabaseHas('calorie_intake_records', [
+            'user_id' => $user->user_id,
+            'meal_id' => $mealId,
+            'food_id' => $foodId,
+            'calories_intake' => '225',
+        ]);
 
         $this->patchJson("/api/nutrition/meals/{$mealId}", [
             'notes' => 'Before training',
+            'items' => [
+                ['food_id' => $foodId, 'quantity' => 2, 'calories' => 300],
+            ],
         ])->assertOk()
             ->assertJsonPath('meal.notes', 'Before training');
+        $this->assertDatabaseCount('calorie_intake_records', 1);
+        $this->assertDatabaseHas('calorie_intake_records', [
+            'meal_id' => $mealId,
+            'food_id' => $foodId,
+            'calories_intake' => '300',
+        ]);
         $this->getJson('/api/nutrition/meals')->assertOk()->assertJsonCount(1, 'meals');
         $goalResponse = $this->postJson('/api/nutrition/goals', [
             'daily_calories' => 2100,
