@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\UserProfile;
+use App\Services\GoogleIdentityVerifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -76,6 +78,66 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type' => 'Bearer',
         ]);
+    }
+
+    public function google(Request $request, GoogleIdentityVerifier $googleIdentityVerifier)
+    {
+        $validatedData = $request->validate([
+            'credential' => 'required|string|max:16384',
+        ]);
+
+        $identity = $googleIdentityVerifier->verify($validatedData['credential']);
+
+        if (! is_array($identity)) {
+            return response()->json(['message' => 'Google sign-in could not be verified.'], 401);
+        }
+
+        $name = $identity['name'] ?? null;
+        $email = $identity['email'] ?? null;
+
+        if (
+            ! is_string($name)
+            || trim($name) === ''
+            || Str::length($name) > 255
+            || ! is_string($email)
+            || ! filter_var($email, FILTER_VALIDATE_EMAIL)
+            || ($identity['email_verified'] ?? false) !== true
+        ) {
+            return response()->json(['message' => 'Google sign-in could not be verified.'], 401);
+        }
+
+        $email = trim($email);
+        $user = User::whereRaw('LOWER(email) = ?', [Str::lower($email)])->first();
+        $created = $user === null;
+
+        if ($created) {
+            $user = User::create([
+                'username' => $this->availableGoogleUsername(trim($name)),
+                'email' => $email,
+                'password' => Str::random(64),
+                'email_verified_at' => now(),
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Google sign-in successful',
+            'user' => $user,
+            'access_token' => $user->createToken('auth_token')->plainTextToken,
+            'token_type' => 'Bearer',
+        ], $created ? 201 : 200);
+    }
+
+    private function availableGoogleUsername(string $name): string
+    {
+        $username = $name;
+        $suffix = 2;
+
+        while (User::where('username', $username)->exists()) {
+            $ending = ' '.$suffix++;
+            $username = Str::substr($name, 0, 255 - Str::length($ending)).$ending;
+        }
+
+        return $username;
     }
 
     public function logout(Request $request)

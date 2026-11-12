@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\GoogleIdentityVerifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Tests\TestCase;
 
 class AuthApiTest extends TestCase
@@ -81,6 +83,75 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', 'Invalid credentials');
     }
 
+    public function test_google_sign_in_creates_a_user_with_google_name_as_username(): void
+    {
+        $this->mockGoogleIdentity([
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+            'email_verified' => true,
+        ]);
+
+        $this->postJson('/api/auth/google', ['credential' => 'google-id-token'])
+            ->assertCreated()
+            ->assertJsonPath('user.username', 'Jane Doe')
+            ->assertJsonPath('user.email', 'jane@example.com')
+            ->assertJsonStructure(['access_token', 'token_type']);
+
+        $this->assertDatabaseHas('users', [
+            'username' => 'Jane Doe',
+            'email' => 'jane@example.com',
+        ]);
+    }
+
+    public function test_google_sign_in_makes_duplicate_names_unique(): void
+    {
+        User::factory()->create(['username' => 'Jane Doe']);
+        $this->mockGoogleIdentity([
+            'name' => 'Jane Doe',
+            'email' => 'another-jane@example.com',
+            'email_verified' => true,
+        ]);
+
+        $this->postJson('/api/auth/google', ['credential' => 'google-id-token'])
+            ->assertCreated()
+            ->assertJsonPath('user.username', 'Jane Doe 2');
+    }
+
+    public function test_google_sign_in_reuses_an_account_with_the_verified_email(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'jane_local',
+            'email' => 'jane@example.com',
+        ]);
+        $this->mockGoogleIdentity([
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+            'email_verified' => true,
+        ]);
+
+        $this->postJson('/api/auth/google', ['credential' => 'google-id-token'])
+            ->assertOk()
+            ->assertJsonPath('user.user_id', $user->user_id)
+            ->assertJsonPath('user.username', 'jane_local');
+
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public function test_google_sign_in_rejects_unverified_email(): void
+    {
+        $this->mockGoogleIdentity([
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+            'email_verified' => false,
+        ]);
+
+        $this->postJson('/api/auth/google', ['credential' => 'google-id-token'])
+            ->assertUnauthorized()
+            ->assertJsonPath('message', 'Google sign-in could not be verified.');
+
+        $this->assertDatabaseCount('users', 0);
+    }
+
     public function test_authenticated_user_can_log_out(): void
     {
         $user = User::factory()->create();
@@ -92,5 +163,16 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('message', 'Logged out successfully');
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    private function mockGoogleIdentity(array $identity): void
+    {
+        $verifier = Mockery::mock(GoogleIdentityVerifier::class);
+        $verifier->shouldReceive('verify')
+            ->once()
+            ->with('google-id-token')
+            ->andReturn($identity);
+
+        $this->app->instance(GoogleIdentityVerifier::class, $verifier);
     }
 }

@@ -96,18 +96,14 @@ class AiNutritionWeekPlanTest extends TestCase
             ->assertJsonPath('meals.0.items.0.food_id', $foodId)
             ->assertJsonPath('meals.0.items.0.calories', 500)
             ->assertJsonPath('meals.0.items.0.protein', 25)
+            ->assertJsonPath('meals.0.is_done', false)
             ->assertJsonPath('nutrition_goal.daily_protein', 110)
             ->assertJsonPath('nutrition_goal.daily_carbohydrates', 250)
             ->assertJsonPath('nutrition_goal.daily_fat', 50);
 
         $this->assertDatabaseCount('meals', 28);
         $this->assertDatabaseCount('meal_items', 28);
-        $this->assertDatabaseCount('calorie_intake_records', 28);
-        $this->assertDatabaseHas('calorie_intake_records', [
-            'user_id' => $user->user_id,
-            'food_id' => $foodId,
-            'calories_intake' => '500',
-        ]);
+        $this->assertDatabaseCount('calorie_intake_records', 0);
         $this->assertDatabaseHas('nutrition_goal', [
             'user_id' => $user->user_id,
             'daily_calories' => 2050,
@@ -131,6 +127,62 @@ class AiNutritionWeekPlanTest extends TestCase
                 && ! str_contains($request['messages'][1]['content'], 'Private dietary preference')
                 && ! str_contains($request['messages'][1]['content'], 'Other user private food');
         });
+    }
+
+    public function test_ai_week_plan_started_midweek_only_generates_through_sunday(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        $user = User::factory()->create();
+        $foodId = DB::table('food')->insertGetId([
+            'name' => 'Balanced meal',
+            'calories' => 500,
+            'protein' => 25,
+            'carbohydrates' => 60,
+            'fat' => 10,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'food_id');
+
+        $requestedDates = [];
+        Http::fake(function (Request $request) use ($foodId, &$requestedDates) {
+            $prompt = json_decode($request['messages'][1]['content'], true);
+            $requestedDates = $prompt['week_dates'];
+            $days = array_map(fn ($date) => [
+                'date' => $date,
+                'meals' => array_map(fn ($type) => [
+                    'meal_type' => $type,
+                    'items' => [['food_id' => $foodId, 'quantity' => 1]],
+                ], ['Breakfast', 'Lunch', 'Dinner', 'Snack']),
+            ], $requestedDates);
+
+            return Http::response(['message' => json_encode(['days' => $days])]);
+        });
+
+        $this->actingAs($user)
+            ->postJson('/api/nutrition/ai-week-plan', [
+                'daily_calories' => 2000,
+                'daily_protein' => 100,
+                'daily_carbohydrates' => 240,
+                'daily_fat' => 40,
+                'start_date' => '2026-11-13',
+                'goal' => 'Maintain fitness',
+            ])
+            ->assertOk()
+            ->assertJsonCount(12, 'meals');
+
+        $this->assertSame(['2026-11-13', '2026-11-14', '2026-11-15'], $requestedDates);
+        $this->assertDatabaseHas('nutrition_goal', [
+            'user_id' => $user->user_id,
+            'start_date' => '2026-11-13 00:00:00',
+            'end_date' => '2026-11-15 23:59:59',
+        ]);
+        $this->assertDatabaseMissing('meals', [
+            'user_id' => $user->user_id,
+            'meal_date' => '2026-11-16',
+        ]);
     }
 
     public function test_ai_week_plan_keeps_calories_in_range_when_macro_targets_are_too_low(): void

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/auth/google', [AuthController::class, 'google']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
@@ -35,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/nutrition/meals', [NutritionController::class, 'index']);
     Route::post('/nutrition/ai-week-plan', [NutritionController::class, 'generateAiWeekPlan']);
     Route::post('/nutrition/meals', [NutritionController::class, 'store']);
+    Route::post('/nutrition/meals/{mealId}/done', [NutritionController::class, 'markMealDone']);
     Route::get('/nutrition/meals/{mealId}', [NutritionController::class, 'show']);
     Route::match(['put', 'patch'], '/nutrition/meals/{mealId}', [NutritionController::class, 'update']);
     Route::get('/nutrition/foods', [NutritionController::class, 'foodIndex']);

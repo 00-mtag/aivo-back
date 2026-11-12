@@ -54,6 +54,17 @@ In order to ensure that the Laravel community is welcoming to all, please review
 
 If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
 
+## Google sign-in
+
+Create a Web application OAuth client ID in Google Cloud Console. Add each frontend origin (for local development, `http://localhost:5173`) to its authorized JavaScript origins.
+
+Set the same client ID in both applications:
+
+- `GOOGLE_CLIENT_ID` in `aivo-back/backend/.env`
+- `VITE_GOOGLE_CLIENT_ID` in `aivo-front/frontend/.env`
+
+No client secret is needed for this Google Identity Services sign-in flow. Laravel verifies Google's ID token, then uses only the account name and email to create or sign in the corresponding AIVO user. No picture, birthday, or other profile data is saved. New users use their Google name as their username. If that username is already taken, a numeric suffix is added.
+
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

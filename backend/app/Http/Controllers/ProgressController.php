@@ -36,6 +36,7 @@ class ProgressController extends Controller
         $calorieIntakeRecords = DB::table('calorie_intake_records')
             ->join('meals', 'calorie_intake_records.meal_id', '=', 'meals.meal_id')
             ->where('calorie_intake_records.user_id', $userId)
+            ->whereNotNull('meals.completed_at')
             ->orderByDesc('calorie_intake_records.created_at')
             ->select(
                 'calorie_intake_records.calorie_intake_id',

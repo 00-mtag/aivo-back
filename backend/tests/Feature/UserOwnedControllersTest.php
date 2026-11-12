@@ -103,14 +103,30 @@ class UserOwnedControllersTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('meal.user_id', $user->user_id)
             ->assertJsonPath('meal.items.0.food_name', 'Oats')
-            ->assertJsonPath('meal.items.0.quantity', 1.5);
+            ->assertJsonPath('meal.items.0.quantity', 1.5)
+            ->assertJsonPath('meal.is_done', false);
         $mealId = $mealResponse->json('meal.meal_id');
+        $this->assertDatabaseCount('calorie_intake_records', 0);
+        DB::table('calorie_intake_records')->insert([
+            'user_id' => $user->user_id,
+            'meal_id' => $mealId,
+            'food_id' => $foodId,
+            'calories_intake' => '225',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->getJson('/api/progress')->assertOk()->assertJsonCount(0, 'calorie_intake_records');
+
+        $this->postJson("/api/nutrition/meals/{$mealId}/done")
+            ->assertOk()
+            ->assertJsonPath('meal.is_done', true);
         $this->assertDatabaseHas('calorie_intake_records', [
             'user_id' => $user->user_id,
             'meal_id' => $mealId,
             'food_id' => $foodId,
             'calories_intake' => '225',
         ]);
+        $this->getJson('/api/progress')->assertOk()->assertJsonCount(1, 'calorie_intake_records');
 
         $this->patchJson("/api/nutrition/meals/{$mealId}", [
             'notes' => 'Before training',
@@ -118,7 +134,8 @@ class UserOwnedControllersTest extends TestCase
                 ['food_id' => $foodId, 'quantity' => 2, 'calories' => 300],
             ],
         ])->assertOk()
-            ->assertJsonPath('meal.notes', 'Before training');
+            ->assertJsonPath('meal.notes', 'Before training')
+            ->assertJsonPath('meal.is_done', true);
         $this->assertDatabaseCount('calorie_intake_records', 1);
         $this->assertDatabaseHas('calorie_intake_records', [
             'meal_id' => $mealId,
@@ -175,6 +192,7 @@ class UserOwnedControllersTest extends TestCase
         $this->actingAs($otherUser)
             ->patchJson("/api/nutrition/meals/{$mealId}", ['notes' => 'Unauthorized'])
             ->assertNotFound();
+        $this->postJson("/api/nutrition/meals/{$mealId}/done")->assertNotFound();
         $this->patchJson("/api/nutrition/goals/{$goalId}", ['daily_calories' => 1])
             ->assertNotFound();
         $this->patchJson("/api/progress/{$progressId}", ['weight' => 1])
