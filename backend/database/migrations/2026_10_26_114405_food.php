@@ -31,6 +31,7 @@ return new class extends Migration
             $table->string('meal_type');
             $table->date('meal_date');
             $table->string('notes')->nullable();
+            $table->timestamp('completed_at')->nullable();
             $table->timestamps();
         });
 
@@ -38,7 +39,7 @@ return new class extends Migration
             $table->id('meal_item_id');
             $table->foreignId('meal_id')->constrained('meals', 'meal_id')->onDelete('cascade');
             $table->foreignId('food_id')->constrained('food', 'food_id')->onDelete('cascade');
-            $table->integer('quantity')->nullable();
+            $table->decimal('quantity', 8, 2)->nullable();
             $table->decimal('calories', 10, 2)->nullable();
             $table->decimal('protein', 10, 2)->nullable();
             $table->decimal('carbohydrates', 10, 2)->nullable();

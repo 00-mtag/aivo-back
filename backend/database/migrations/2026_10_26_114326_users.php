@@ -16,12 +16,14 @@ return new class extends Migration
             $table->id('profile_id');
             $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
             $table->integer('bday')->nullable();
+            $table->date('birth_date')->nullable();
             $table->string('gender')->nullable();
             $table->string('address')->nullable();
             $table->string('phone_number')->nullable();
             $table->string('height')->nullable();
             $table->string('weight')->nullable();
             $table->string('activity_level')->nullable();
+            $table->string('experience_level')->nullable();
             $table->string('fitness_goal')->nullable();
             $table->string('target_weight')->nullable();
             $table->string('tdee')->nullable();
@@ -29,6 +31,7 @@ return new class extends Migration
             $table->text('medical_conditions')->nullable();
             $table->text('dietary_preferences')->nullable();
             $table->binary('profile_picture')->nullable();
+            $table->string('profile_picture_mime', 100)->nullable();
             $table->timestamps();
         });
         Schema::create('food_allergies', function (Blueprint $table) {

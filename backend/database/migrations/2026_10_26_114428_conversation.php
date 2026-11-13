@@ -27,18 +27,11 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('ai_memory', function (Blueprint $table) {
-            $table->id('memory_id');
-            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
-            $table->text('content');
-            $table->timestamps();
-        });
     }
 
     public function down(): void
     {
         Schema::dropIfExists('conversations');
         Schema::dropIfExists('messages');
-        Schema::dropIfExists('ai_memory');
     }
 };
