@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Notifications\PasswordResetCodeNotification;
 use App\Services\GoogleIdentityVerifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Mockery;
 use Tests\TestCase;
 
@@ -81,6 +84,83 @@ class AuthApiTest extends TestCase
             'password' => 'wrong-password',
         ])->assertUnauthorized()
             ->assertJsonPath('message', 'Invalid credentials');
+    }
+
+    public function test_forgot_password_sends_a_code_and_reset_code_is_single_use(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'jane@example.com']);
+
+        $this->postJson('/api/forgot-password', ['email' => $user->email])
+            ->assertOk()
+            ->assertJsonPath('message', 'If an account exists for that email, a verification code is on its way.');
+
+        Notification::assertSentTo($user, PasswordResetCodeNotification::class);
+        $notification = Notification::sent($user, PasswordResetCodeNotification::class)->first();
+        $mail = $notification->toMail($user);
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $notification->code);
+        $this->assertStringContainsString($notification->code, implode(' ', $mail->introLines));
+        $this->assertStringContainsString('10 minutes', implode(' ', $mail->introLines));
+        $this->assertNull($mail->actionUrl);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
+
+        $this->travel(9)->minutes();
+        $payload = [
+            'email' => $user->email,
+            'code' => $notification->code,
+            'password' => 'new-secure-password',
+            'password_confirmation' => 'new-secure-password',
+        ];
+
+        $this->postJson('/api/reset-password', $payload)
+            ->assertOk()
+            ->assertJsonPath('message', 'Your password has been reset.');
+
+        $this->assertTrue(Hash::check('new-secure-password', $user->fresh()->password));
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
+
+        $this->postJson('/api/reset-password', $payload)->assertUnprocessable();
+    }
+
+    public function test_forgot_password_does_not_disclose_unknown_email_addresses(): void
+    {
+        Notification::fake();
+
+        $this->postJson('/api/forgot-password', ['email' => 'unknown@example.com'])
+            ->assertOk()
+            ->assertJsonPath('message', 'If an account exists for that email, a verification code is on its way.');
+
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('password_reset_tokens', 0);
+    }
+
+    public function test_reset_password_rejects_a_mismatched_confirmation(): void
+    {
+        $this->postJson('/api/reset-password', [
+            'email' => 'jane@example.com',
+            'code' => '123456',
+            'password' => 'new-secure-password',
+            'password_confirmation' => 'different-password',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['password']);
+    }
+
+    public function test_reset_password_rejects_an_expired_code(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'jane@example.com']);
+
+        $this->postJson('/api/forgot-password', ['email' => $user->email]);
+        $notification = Notification::sent($user, PasswordResetCodeNotification::class)->first();
+        $this->travel(11)->minutes();
+
+        $this->postJson('/api/reset-password', [
+            'email' => $user->email,
+            'code' => $notification->code,
+            'password' => 'new-secure-password',
+            'password_confirmation' => 'new-secure-password',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['code']);
     }
 
     public function test_google_sign_in_creates_a_user_with_google_name_as_username(): void

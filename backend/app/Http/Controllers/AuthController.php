@@ -5,8 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\UserProfile;
 use App\Services\GoogleIdentityVerifier;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -78,6 +83,101 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type' => 'Bearer',
         ]);
+    }
+
+    public function forgotPassword(Request $request)
+    {
+        $validatedData = $request->validate([
+            'email' => 'required|string|email',
+        ]);
+
+        $user = User::where('email', $validatedData['email'])->first();
+
+        if ($user) {
+            $resetRecord = DB::table('password_reset_tokens')
+                ->where('email', $user->email)
+                ->first();
+
+            if (
+                ! $resetRecord
+                || ! $resetRecord->created_at
+                || Carbon::parse($resetRecord->created_at)->addSeconds(config('auth.passwords.users.throttle'))->isPast()
+            ) {
+                $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+                DB::table('password_reset_tokens')->updateOrInsert(
+                    ['email' => $user->email],
+                    ['token' => Hash::make($code), 'created_at' => now()]
+                );
+
+                $user->sendPasswordResetNotification($code);
+            }
+        }
+
+        return response()->json([
+            'message' => 'If an account exists for that email, a verification code is on its way.',
+        ]);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $validatedData = $request->validate([
+            'code' => ['required', 'string', 'regex:/^\d{6}$/'],
+            'email' => 'required|string|email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $rateLimitKey = 'password-reset:'.Str::lower($validatedData['email']).'|'.$request->ip();
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 5)) {
+            return response()->json([
+                'message' => 'Too many verification attempts. Request a new code and try again later.',
+            ], 429);
+        }
+
+        $reset = DB::transaction(function () use ($validatedData, $rateLimitKey): bool {
+            $resetRecord = DB::table('password_reset_tokens')
+                ->where('email', $validatedData['email'])
+                ->lockForUpdate()
+                ->first();
+
+            if (
+                ! $resetRecord
+                || ! $resetRecord->created_at
+                || Carbon::parse($resetRecord->created_at)->addMinutes(config('auth.passwords.users.expire'))->isPast()
+                || ! Hash::check($validatedData['code'], $resetRecord->token)
+            ) {
+                RateLimiter::hit($rateLimitKey, config('auth.passwords.users.expire') * 60);
+
+                return false;
+            }
+
+            $user = User::where('email', $validatedData['email'])->first();
+            if (! $user) {
+                RateLimiter::hit($rateLimitKey, config('auth.passwords.users.expire') * 60);
+
+                return false;
+            }
+
+            $user->forceFill([
+                'password' => Hash::make($validatedData['password']),
+                'remember_token' => Str::random(60),
+            ])->save();
+
+            DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+            RateLimiter::clear($rateLimitKey);
+            event(new PasswordReset($user));
+
+            return true;
+        });
+
+        if (! $reset) {
+            return response()->json([
+                'message' => 'This verification code is invalid or expired.',
+                'errors' => ['code' => ['This verification code is invalid or expired.']],
+            ], 422);
+        }
+
+        return response()->json(['message' => 'Your password has been reset.']);
     }
 
     public function google(Request $request, GoogleIdentityVerifier $googleIdentityVerifier)
