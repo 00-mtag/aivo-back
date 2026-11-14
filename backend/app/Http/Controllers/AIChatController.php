@@ -27,7 +27,11 @@ class AIChatController extends Controller
             return response()->json(['message' => 'The AI chat service is not configured.'], 503);
         }
 
+        $ownerMarker = 'AI+'.$request->user()->user_id;
         $catalog = DB::table('exercises')
+            ->where(function ($ownerQuery) use ($ownerMarker) {
+                $ownerQuery->whereNull('created_by')->orWhere('created_by', $ownerMarker);
+            })
             ->select('exercise_id', 'name', 'muscle_group', 'weightORduration', 'equipment', 'difficulty', 'best_for')
             ->orderBy('name')
             ->get();
@@ -340,8 +344,10 @@ PROMPT;
             'messages.*.role' => 'required|in:user,assistant',
             'messages.*.content' => 'required|string|max:4000',
             'conversation_id' => 'sometimes|integer',
+            'category' => 'sometimes|string|in:workout,nutrition,general',
         ]);
         $userId = $request->user()->user_id;
+        $category = $validated['category'] ?? 'general';
         $conversation = null;
         if (isset($validated['conversation_id'])) {
             $conversation = DB::table('conversations')
@@ -351,6 +357,9 @@ PROMPT;
 
             if (! $conversation) {
                 return response()->json(['message' => 'Conversation not found'], 404);
+            }
+            if ($conversation->category !== $category) {
+                return response()->json(['message' => 'Conversation category does not match.'], 422);
             }
         }
 
@@ -408,12 +417,13 @@ PROMPT;
             ? $conversation->title
             : ($this->generateConversationTitle($url, $key, $validated['message']) ?: mb_substr($validated['message'], 0, 255));
 
-        $conversationId = DB::transaction(function () use ($conversation, $userId, $validated, $answer, $title) {
+        $conversationId = DB::transaction(function () use ($conversation, $userId, $validated, $answer, $title, $category) {
             $now = now();
             if (! $conversation) {
                 $conversationId = DB::table('conversations')->insertGetId([
                     'user_id' => $userId,
                     'title' => $title,
+                    'category' => $category,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ], 'conversation_id');
@@ -487,9 +497,16 @@ PROMPT;
 
     public function index(Request $request)
     {
-        $conversations = DB::table('conversations')
+        $validated = $request->validate([
+            'category' => 'sometimes|string|in:workout,nutrition,general',
+        ]);
+        $query = DB::table('conversations')
             ->where('user_id', $request->user()->user_id)
-            ->orderByDesc('updated_at')
+            ->orderByDesc('updated_at');
+        if (isset($validated['category'])) {
+            $query->where('category', $validated['category']);
+        }
+        $conversations = $query
             ->get()
             ->map(fn ($conversation) => $this->conversationWithMessages($conversation));
 
@@ -501,12 +518,14 @@ PROMPT;
         $validated = $request->validate([
             'title' => 'sometimes|nullable|string|max:255',
             'content' => 'sometimes|nullable|string',
+            'category' => 'sometimes|string|in:workout,nutrition,general',
         ]);
         $userId = $request->user()->user_id;
 
         $conversationId = DB::table('conversations')->insertGetId([
             'user_id' => $userId,
             'title' => $validated['title'] ?? null,
+            'category' => $validated['category'] ?? 'general',
             'created_at' => now(),
             'updated_at' => now(),
         ], 'conversation_id');

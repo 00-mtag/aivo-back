@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id('conversation_id');
             $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
             $table->string('title')->nullable();
+            $table->string('category')->default('general');
             $table->timestamps();
         });
 

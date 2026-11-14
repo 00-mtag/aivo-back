@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AIChatController;
+use App\Http\Controllers\AISuggestionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ExerciseController;
 use App\Http\Controllers\NutritionController;
@@ -29,6 +30,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/ai/chat', [AIChatController::class, 'chat']);
     Route::post('/ai/workout-plan', [AIChatController::class, 'generateWorkoutPlan']);
+    Route::post('/ai/suggestions/workout/save', [AISuggestionController::class, 'saveWorkout']);
+    Route::post('/ai/suggestions/nutrition/save', [AISuggestionController::class, 'saveNutrition']);
     Route::get('/ai-chat/conversations', [AIChatController::class, 'index']);
     Route::post('/ai-chat/conversations', [AIChatController::class, 'store']);
     Route::get('/ai-chat/conversations/{conversationId}', [AIChatController::class, 'show']);

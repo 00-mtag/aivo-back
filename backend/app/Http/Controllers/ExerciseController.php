@@ -24,7 +24,11 @@ class ExerciseController extends Controller
 
     public function index(Request $request)
     {
+        $ownerMarker = 'AI+'.$request->user()->user_id;
         $query = DB::table('exercises')
+            ->where(function ($ownerQuery) use ($ownerMarker) {
+                $ownerQuery->whereNull('created_by')->orWhere('created_by', $ownerMarker);
+            })
             ->select(
                 'exercise_id',
                 'name',

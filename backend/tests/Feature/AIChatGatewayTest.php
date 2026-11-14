@@ -44,6 +44,7 @@ class AIChatGatewayTest extends TestCase
         $this->assertDatabaseHas('conversations', [
             'conversation_id' => $conversationId,
             'title' => '20-Minute Workout Ideas',
+            'category' => 'general',
         ]);
         $this->assertDatabaseCount('messages', 2);
         $this->assertDatabaseHas('messages', [
@@ -108,6 +109,70 @@ class AIChatGatewayTest extends TestCase
 
         $this->assertDatabaseCount('conversations', 1);
         $this->assertDatabaseCount('messages', 2);
+    }
+
+    public function test_chat_saves_category_and_conversation_list_can_filter_by_it(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        Http::fake(fn (Request $request) => Http::response([
+            'message' => str_contains($request['messages'][0]['content'], 'Create a concise')
+                ? 'Workout chat'
+                : 'Try a steady routine.',
+        ]));
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->postJson('/api/ai/chat', [
+                'system_prompt' => 'You are AIVO.',
+                'message' => 'Suggest a workout.',
+                'category' => 'workout',
+            ])
+            ->assertOk();
+        $conversationId = $response->json('conversation_id');
+
+        $this->assertDatabaseHas('conversations', [
+            'conversation_id' => $conversationId,
+            'category' => 'workout',
+        ]);
+
+        $this->getJson('/api/ai-chat/conversations?category=workout')
+            ->assertOk()
+            ->assertJsonCount(1, 'conversations')
+            ->assertJsonPath('conversations.0.category', 'workout');
+
+        $this->getJson('/api/ai-chat/conversations?category=nutrition')
+            ->assertOk()
+            ->assertJsonCount(0, 'conversations');
+    }
+
+    public function test_chat_cannot_continue_a_conversation_under_a_different_category(): void
+    {
+        config([
+            'services.ai_gateway.url' => 'https://gateway.example/api/ai/chat',
+            'services.ai_gateway.key' => 'test-key',
+        ]);
+        Http::fake(['gateway.example/*' => Http::response(['message' => 'A response.'])]);
+        $user = User::factory()->create();
+        $conversationId = DB::table('conversations')->insertGetId([
+            'user_id' => $user->user_id,
+            'title' => 'Workout help',
+            'category' => 'workout',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], 'conversation_id');
+
+        $this->actingAs($user)
+            ->postJson('/api/ai/chat', [
+                'system_prompt' => 'You are AIVO.',
+                'message' => 'What next?',
+                'conversation_id' => $conversationId,
+                'category' => 'nutrition',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Conversation category does not match.');
     }
 
     public function test_workout_plan_uses_only_goal_and_database_exercises_when_profile_sharing_is_declined(): void

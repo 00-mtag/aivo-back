@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class WorkoutController extends Controller
 {
@@ -108,12 +109,13 @@ class WorkoutController extends Controller
             $request->merge(['plan_name' => $request->input('name')]);
         }
 
-        return $request->validate($this->workoutRules($partial));
+        return $request->validate($this->workoutRules($partial, (int) $request->user()->user_id));
     }
 
-    private function workoutRules(bool $partial = false): array
+    private function workoutRules(bool $partial, int $userId): array
     {
         $required = $partial ? 'sometimes|required' : 'required';
+        $ownerMarker = 'AI+'.$userId;
 
         return [
             'plan_name' => "$required|string|max:255",
@@ -127,7 +129,15 @@ class WorkoutController extends Controller
             'active' => 'sometimes|boolean',
             'exercises.*' => 'array:day,exercise_id,sets,reps,weight,duration,rest_seconds,notes,muscle,sort_order',
             'exercises.*.day' => 'sometimes|nullable|string|in:Mon,Tue,Wed,Thu,Fri,Sat,Sun',
-            'exercises.*.exercise_id' => 'required|integer|exists:exercises,exercise_id',
+            'exercises.*.exercise_id' => [
+                'required',
+                'integer',
+                Rule::exists('exercises', 'exercise_id')->where(function ($query) use ($ownerMarker) {
+                    $query->where(function ($ownerQuery) use ($ownerMarker) {
+                        $ownerQuery->whereNull('created_by')->orWhere('created_by', $ownerMarker);
+                    });
+                }),
+            ],
             'exercises.*.sets' => 'sometimes|nullable|string|max:255',
             'exercises.*.reps' => 'sometimes|nullable|string|max:255',
             'exercises.*.weight' => 'sometimes|nullable|string|max:255',
