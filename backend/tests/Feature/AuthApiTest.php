@@ -181,6 +181,7 @@ class AuthApiTest extends TestCase
             'username' => 'Jane Doe',
             'email' => 'jane@example.com',
         ]);
+        $this->assertNotNull(User::where('email', 'jane@example.com')->value('email_verified_at'));
     }
 
     public function test_google_sign_in_makes_duplicate_names_unique(): void
@@ -215,6 +216,23 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('user.username', 'jane_local');
 
         $this->assertDatabaseCount('users', 1);
+    }
+
+    public function test_google_sign_in_verifies_an_existing_unverified_account(): void
+    {
+        $user = User::factory()->unverified()->create(['email' => 'jane@example.com']);
+        $this->mockGoogleIdentity([
+            'name' => 'Jane Doe',
+            'email' => 'jane@example.com',
+            'email_verified' => true,
+        ]);
+
+        $response = $this->postJson('/api/auth/google', ['credential' => 'google-id-token'])
+            ->assertOk()
+            ->assertJsonPath('user.user_id', $user->user_id);
+
+        $this->assertNotNull($response->json('user.email_verified_at'));
+        $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
     public function test_google_sign_in_rejects_unverified_email(): void

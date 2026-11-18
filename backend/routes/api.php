@@ -3,6 +3,7 @@
 use App\Http\Controllers\AIChatController;
 use App\Http\Controllers\AISuggestionController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\ExerciseController;
 use App\Http\Controllers\NutritionController;
 use App\Http\Controllers\ProfileController;
@@ -22,6 +23,9 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::patch('/account/email', [EmailVerificationController::class, 'updateEmail']);
+    Route::post('/email/verification-notification', [EmailVerificationController::class, 'send'])->middleware('throttle:6,1');
 
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::match(['put', 'patch'], '/profile', [ProfileController::class, 'update']);

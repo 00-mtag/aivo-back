@@ -39,6 +39,10 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
     ],
 
+    'frontend' => [
+        'url' => env('FRONTEND_URL', 'http://localhost:5173'),
+    ],
+
     'ai_gateway' => [
         'url' => env('AI_GATEWAY_URL'),
         'key' => env('AI_GATEWAY_API_KEY'),

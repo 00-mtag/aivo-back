@@ -217,6 +217,8 @@ class AuthController extends Controller
                 'password' => Str::random(64),
                 'email_verified_at' => now(),
             ]);
+        } elseif ($user->email_verified_at === null) {
+            $user->forceFill(['email_verified_at' => now()])->save();
         }
 
         return response()->json([
