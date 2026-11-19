@@ -134,6 +134,19 @@ class AuthApiTest extends TestCase
         $this->assertDatabaseCount('password_reset_tokens', 0);
     }
 
+    public function test_forgot_password_is_rate_limited(): void
+    {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/forgot-password', [
+                'email' => 'unknown@example.com',
+            ]);
+        }
+
+        $this->postJson('/api/forgot-password', [
+            'email' => 'unknown@example.com',
+        ])->assertTooManyRequests();
+    }
+
     public function test_reset_password_rejects_a_mismatched_confirmation(): void
     {
         $this->postJson('/api/reset-password', [

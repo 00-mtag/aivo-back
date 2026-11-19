@@ -119,6 +119,18 @@ class OnboardingProfileTest extends TestCase
             ->assertJsonValidationErrors('profile_picture');
     }
 
+    public function test_profile_rejects_non_numeric_height_weight_and_target_weight(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->putJson('/api/profile', [
+                'height' => '170junk',
+                'weight' => '70.5 pounds extra',
+                'target_weight' => 'target',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['height', 'weight', 'target_weight']);
+    }
+
     public function test_profile_can_replace_or_clear_allergy_and_health_condition_selections(): void
     {
         $user = User::factory()->create();

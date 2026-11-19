@@ -202,12 +202,12 @@ class ProgressController extends Controller
         if (! is_string($weight) && ! is_numeric($weight)) {
             return null;
         }
-        if (! preg_match('/\d+(?:\.\d+)?/', (string) $weight, $matches)) {
+        if (! preg_match('/^(\d+(?:\.\d+)?)\s*(\S*)$/', trim((string) $weight), $matches)) {
             return null;
         }
 
-        $weightKg = (float) $matches[0];
-        if (preg_match('/\b(lb|lbs|pound|pounds)\b/i', (string) $weight)) {
+        $weightKg = (float) $matches[1];
+        if (in_array(strtolower($matches[2]), ['lb', 'lbs', 'pound', 'pounds'], true)) {
             $weightKg *= 0.45359237;
         }
 

@@ -27,32 +27,25 @@ class AuthController extends Controller
             'password' => 'required|string|min:8',
         ]);
 
-        $user = User::create([
-        //    'first_name' => $validatedData['first_name'],
-        //    'last_name' => $validatedData['last_name'],
-            'username' => $validatedData['username'],
-            'email' => $validatedData['email'],
-            'password' => $validatedData['password'],
-        ]);
+        [$user] = DB::transaction(function () use ($validatedData) {
+            $user = User::create([
+                'first_name' => $validatedData['first_name'] ?? null,
+                'last_name' => $validatedData['last_name'] ?? null,
+                'username' => $validatedData['username'],
+                'email' => $validatedData['email'],
+                'password' => $validatedData['password'],
+            ]);
 
-        if (! empty($validatedData['first_name'])) {
-            UserProfile::create([
-                'user_id' => $user->user_id,
-                'first_name' => $validatedData['first_name'],
-            ]);
-        }
-        if (! empty($validatedData['last_name'])) {
-            UserProfile::create([
-                'user_id' => $user->user_id,
-                'last_name' => $validatedData['last_name'],
-            ]);
-        }
-        if (! empty($validatedData['phone_number'])) {
-            UserProfile::create([
-                'user_id' => $user->user_id,
-                'phone_number' => $validatedData['phone_number'],
-            ]);
-        }
+            $profileAttributes = array_filter([
+                'phone_number' => $validatedData['phone_number'] ?? null,
+            ], fn ($value) => $value !== null);
+
+            if ($profileAttributes !== []) {
+                UserProfile::create(['user_id' => $user->user_id, ...$profileAttributes]);
+            }
+
+            return [$user];
+        });
 
         return response()->json([
             'message' => 'User registered successfully',

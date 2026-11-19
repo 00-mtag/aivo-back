@@ -12,11 +12,11 @@ use App\Http\Controllers\WorkoutController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/auth/google', [AuthController::class, 'google']);
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/auth/google', [AuthController::class, 'google'])->middleware('throttle:10,1');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
@@ -32,10 +32,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/exercises', [ExerciseController::class, 'index']);
 
-    Route::post('/ai/chat', [AIChatController::class, 'chat']);
-    Route::post('/ai/workout-plan', [AIChatController::class, 'generateWorkoutPlan']);
-    Route::post('/ai/suggestions/workout/save', [AISuggestionController::class, 'saveWorkout']);
-    Route::post('/ai/suggestions/nutrition/save', [AISuggestionController::class, 'saveNutrition']);
+    Route::post('/ai/chat', [AIChatController::class, 'chat'])->middleware('throttle:30,1');
+    Route::post('/ai/workout-plan', [AIChatController::class, 'generateWorkoutPlan'])->middleware('throttle:10,1');
+    Route::post('/ai/suggestions/workout/save', [AISuggestionController::class, 'saveWorkout'])->middleware('throttle:20,1');
+    Route::post('/ai/suggestions/nutrition/save', [AISuggestionController::class, 'saveNutrition'])->middleware('throttle:20,1');
     Route::get('/ai-chat/conversations', [AIChatController::class, 'index']);
     Route::post('/ai-chat/conversations', [AIChatController::class, 'store']);
     Route::get('/ai-chat/conversations/{conversationId}', [AIChatController::class, 'show']);

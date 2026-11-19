@@ -45,12 +45,12 @@ class ProfileController extends Controller
             'address' => 'sometimes|nullable|string|max:255',
             'phone_number' => 'sometimes|nullable|string|max:255',
             'birth_date' => 'sometimes|nullable|date|before_or_equal:today',
-            'height' => 'sometimes|nullable|string|max:255',
-            'weight' => 'sometimes|nullable|string|max:255',
+            'height' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^\d+(?:\.\d+)?(?:\s*(?:cm|in|inch|inches))?$/i'],
+            'weight' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^\d+(?:\.\d+)?(?:\s*(?:kg|kgs|kilograms?|lb|lbs|pounds?))?$/i'],
             'activity_level' => 'sometimes|nullable|in:Sedentary,Lightly active,Moderately active,Very active,Extra active',
             'fitness_goal' => 'sometimes|nullable|string|max:255',
             'experience_level' => 'sometimes|nullable|string|max:255',
-            'target_weight' => 'sometimes|nullable|string|max:255',
+            'target_weight' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^\d+(?:\.\d+)?(?:\s*(?:kg|kgs|kilograms?|lb|lbs|pounds?))?$/i'],
             'profile_picture' => 'sometimes|nullable|image|mimes:jpeg,png,webp|max:5120',
             'allergies' => 'sometimes|array',
             'allergies.*' => 'required|string|max:255|distinct',
@@ -170,12 +170,16 @@ class ProfileController extends Controller
         if (! is_string($value) && ! is_numeric($value)) {
             return null;
         }
-        if (! preg_match('/-?\d+(?:\.\d+)?/', (string) $value, $matches)) {
+        if (! preg_match('/^(-?\d+(?:\.\d+)?)\s*(\S*)$/', trim((string) $value), $matches)) {
             return null;
         }
 
-        $number = (float) $matches[0];
-        $isImperial = preg_match('/\b'.preg_quote($unit, '/').'(?:s|\\b)/i', (string) $value) === 1;
+        $number = (float) $matches[1];
+        $suffix = strtolower($matches[2]);
+        $imperialSuffixes = $unit === 'lb'
+            ? ['lb', 'lbs', 'pound', 'pounds']
+            : ['in', 'inch', 'inches'];
+        $isImperial = in_array($suffix, $imperialSuffixes, true);
 
         return $isImperial ? $number * $conversion : $number;
     }
