@@ -56,4 +56,4 @@ RUN sed -ri 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-availabl
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "php artisan migrate --force && port=\"${PORT:-10000}\" && sed -i \"s/Listen 80/Listen ${port}/\" /etc/apache2/ports.conf && sed -i \"s/:80>/:${port}>/\" /etc/apache2/sites-available/000-default.conf && exec apache2-foreground"]
+CMD ["sh", "-c", "php artisan migrate --force && php artisan db:seed --class=ExerciseSeeder --force && port=\"${PORT:-10000}\" && sed -i \"s/Listen 80/Listen ${port}/\" /etc/apache2/ports.conf && sed -i \"s/:80>/:${port}>/\" /etc/apache2/sites-available/000-default.conf && exec apache2-foreground"]
